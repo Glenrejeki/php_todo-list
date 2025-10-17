@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>PHP - Aplikasi Todolist</title>
-  <<link rel="stylesheet" href="/assets/vendor/bootstrap-5.3.8-dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/assets/vendor/bootstrap-5.3.8-dist/css/bootstrap.min.css">
 </head>
 <body>
 <div class="container-fluid p-5">
@@ -109,7 +109,6 @@
 </div>
 
 <script src="/assets/vendor/bootstrap-5.3.8-dist/js/bootstrap.min.js"></script>
-
 <script>
 function showModalEditTodo(id, activity, status) {
   document.getElementById('inputEditTodoId').value = id;
