@@ -8,16 +8,23 @@ class TodoController {
     exit; // pastikan eksekusi berhenti setelah redirect
   }
 
-  public function index() {
-    $filter = $_GET['filter'] ?? 'all';             // all|done|todo
-    $q      = trim($_GET['q'] ?? '');
-    $m = new TodoModel();
-    $todos = $m->getTodos($filter, $q);
+public function index() {
+  $filter = $_GET['filter'] ?? 'all';
+  $q = trim($_GET['q'] ?? '');
+  $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-    // untuk pesan error/sukses sederhana via query string
-    $flash = $_GET['msg'] ?? '';
-    include __DIR__ . '/../views/TodoView.php';
+  $m = new TodoModel();
+  $todos = $m->getTodos($filter, $q);
+
+  $selectedTodo = null;
+  if ($id > 0) {
+    $selectedTodo = $m->find($id);
   }
+
+  $flash = $_GET['msg'] ?? '';
+  include __DIR__ . '/../views/TodoView.php';
+}
+
 
   public function create() {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -83,23 +90,17 @@ class TodoController {
     $this->redirect('index.php?msg=Hapus+berhasil');
   }
 
+  /**
+   * COMPAT: jika masih ada link lama ?page=detail&id=..., kita arahkan
+   * ke index dengan query ?id=... agar detail tampil di panel kanan.
+   */
   public function detail() {
     $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-    if ($id <= 0) {
-      echo "ID tidak diberikan atau tidak valid.";
-      return;
-    }
-
-    $m = new TodoModel();
-    $todo = $m->find($id);
-
-    if (!$todo) {
-      echo "Todo tidak ditemukan.";
-      return;
-    }
-
-    // pastikan views/TodoDetail.php membaca $todo dan menampilkannya
-    include __DIR__ . '/../views/TodoDetail.php';
+    $qs = [];
+    if ($id > 0) $qs[] = 'id=' . $id;
+    if (!empty($_GET['filter'])) $qs[] = 'filter=' . urlencode($_GET['filter']);
+    if (!empty($_GET['q'])) $qs[] = 'q=' . urlencode($_GET['q']);
+    $this->redirect('index.php' . (empty($qs) ? '' : '?' . implode('&', $qs)));
   }
 
   /** AJAX: terima urutan ID baru (JSON: {order:[...ids...]}) */
