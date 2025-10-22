@@ -1,4 +1,3 @@
-
 <?php
 // views/TodoDetail.php
 if (!isset($todo) || !$todo) {
