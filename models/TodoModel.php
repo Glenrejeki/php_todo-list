@@ -1,93 +1,125 @@
 <?php
+// models/TodoModel.php
 require_once __DIR__ . '/../config.php';
 
 class TodoModel {
-  private $conn;
-  public function __construct() {
-    $this->conn = pg_connect(
-      'host='.DB_HOST.' port='.DB_PORT.' dbname='.DB_NAME.' user='.DB_USER.' password='.DB_PASSWORD
-    );
-    if (!$this->conn) die('Koneksi database gagal: ' . pg_last_error());
-  }
+    private $conn;
 
-  /** Ambil list todo dengan filter & search, urut berdasar sort_order lalu created_at */
-  public function getTodos(string $filter = 'all', string $q = ''): array {
-    $where = [];
-    $params = [];
-    if ($filter === 'done')      { $where[] = 'is_finished = TRUE'; }
-    elseif ($filter === 'todo')  { $where[] = 'is_finished = FALSE'; }
+    public function __construct() {
+        $host = defined('DB_HOST') ? DB_HOST : 'localhost';
+        $port = defined('DB_PORT') ? DB_PORT : '5432';
+        $dbname = defined('DB_NAME') ? DB_NAME : 'db_todo';
+        $user = defined('DB_USER') ? DB_USER : (defined('DB_USER') ? DB_USER : 'postgres');
+        $pass = defined('DB_PASSWORD') ? DB_PASSWORD : (defined('DB_PASS') ? DB_PASS : '');
 
-    if ($q !== '') {
-      $params[] = '%'.mb_strtolower($q).'%';
-      $where[]  = '(LOWER(title) LIKE $'.count($params).' OR LOWER(COALESCE(description, \'\')) LIKE $'.count($params).')';
+        $connStr = "host=$host port=$port dbname=$dbname user=$user password=$pass";
+        $this->conn = pg_connect($connStr);
+        if (!$this->conn) {
+            die("Gagal koneksi ke Postgres. Periksa config.php");
+        }
     }
 
-    $sql = 'SELECT id, title, description, is_finished, created_at, updated_at
-            FROM public.todo';
-    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
-    $sql .= ' ORDER BY sort_order ASC, created_at DESC, id DESC';
+    public function getTodos($filter = 'all', $q = '') {
+        $sql = "SELECT id, title, description, is_finished, sort_order, created_at FROM todo";
+        $conds = [];
+        $params = [];
+        $idx = 1;
 
-    $res = $params ? pg_query_params($this->conn, $sql, $params) : pg_query($this->conn, $sql);
-    $rows = [];
-    if ($res) while ($r = pg_fetch_assoc($res)) $rows[] = $r;
-    return $rows;
-  }
+        if ($filter === 'done' || $filter === 'finished') {
+            $conds[] = "is_finished = TRUE";
+        } elseif ($filter === 'todo' || $filter === 'unfinished') {
+            $conds[] = "is_finished = FALSE";
+        }
 
-  /** Cek judul unik (case-insensitive). $excludeId untuk update. */
-  public function titleExists(string $title, ?int $excludeId = null): bool {
-    if ($excludeId) {
-      $res = pg_query_params($this->conn,
-        'SELECT 1 FROM public.todo WHERE LOWER(title)=LOWER($1) AND id<>$2 LIMIT 1',
-        [$title, $excludeId]
-      );
-    } else {
-      $res = pg_query_params($this->conn,
-        'SELECT 1 FROM public.todo WHERE LOWER(title)=LOWER($1) LIMIT 1',
-        [$title]
-      );
+        if ($q !== '') {
+            $conds[] = "(LOWER(title) LIKE LOWER(\$${idx}::text) OR LOWER(description) LIKE LOWER(\$${idx}::text))";
+            $params[] = '%' . $q . '%';
+            $idx++;
+        }
+
+        if (count($conds) > 0) {
+            $sql .= " WHERE " . implode(" AND ", $conds);
+        }
+
+        $sql .= " ORDER BY sort_order ASC, id ASC";
+
+        if (count($params) > 0) {
+            $res = pg_query_params($this->conn, $sql, $params);
+        } else {
+            $res = pg_query($this->conn, $sql);
+        }
+
+        if (!$res) return [];
+
+        $rows = [];
+        while ($r = pg_fetch_assoc($res)) {
+            $r['is_finished'] = ($r['is_finished'] === 't' || $r['is_finished'] === true) ? 1 : 0;
+            $rows[] = $r;
+        }
+        return $rows;
     }
-    return $res && pg_num_rows($res) > 0;
-  }
 
-  public function create(string $title, string $description = '', bool $is_finished = false): bool {
-    return pg_query_params($this->conn,
-      'INSERT INTO public.todo (title, description, is_finished, sort_order)
-       VALUES ($1, $2, $3, COALESCE((SELECT MAX(sort_order)+1 FROM public.todo), 1))',
-      [$title, $description, $is_finished]
-    ) !== false;
-  }
-
-  public function update(int $id, string $title, string $description, bool $is_finished): bool {
-    return pg_query_params($this->conn,
-      'UPDATE public.todo SET title=$1, description=$2, is_finished=$3 WHERE id=$4',
-      [$title, $description, $is_finished, $id]
-    ) !== false;
-  }
-
-  public function delete(int $id): bool {
-    return pg_query_params($this->conn, 'DELETE FROM public.todo WHERE id=$1', [$id]) !== false;
-  }
-
-  public function find(int $id): ?array {
-    $res = pg_query_params($this->conn,
-      'SELECT id, title, description, is_finished, created_at, updated_at, sort_order
-       FROM public.todo WHERE id=$1', [$id]);
-    return ($res && pg_num_rows($res) === 1) ? pg_fetch_assoc($res) : null;
-  }
-
-  /** Persist urutan baru: $orders = [id1,id2,id3,...] */
-  public function reorder(array $orders): bool {
-    if (empty($orders)) return true;
-    // CASE WHEN id=.. THEN pos ...
-    $case = [];
-    $params = [];
-    $pos = 1;
-    foreach ($orders as $id) {
-      $case[] = 'WHEN id=$'.count($params)+1 .' THEN '.($pos++);
-      $params[] = (int)$id;
+    public function find($id) {
+        $sql = "SELECT id, title, description, is_finished, sort_order, created_at FROM todo WHERE id = $1 LIMIT 1";
+        $res = pg_query_params($this->conn, $sql, [$id]);
+        if (!$res) return false;
+        $row = pg_fetch_assoc($res);
+        if ($row) {
+            $row['is_finished'] = ($row['is_finished'] === 't' || $row['is_finished'] === true) ? 1 : 0;
+            return $row;
+        }
+        return false;
     }
-    $sql = 'UPDATE public.todo SET sort_order = CASE '.implode(' ', $case).' END WHERE id = ANY($'.count($params)+1 .')';
-    $params[] = '{'.implode(',', array_map('intval',$orders)).'}';
-    return pg_query_params($this->conn, $sql, $params) !== false;
-  }
+
+    public function titleExists($title, $exceptId = null) {
+        if ($exceptId) {
+            $sql = "SELECT 1 FROM todo WHERE LOWER(title)=LOWER($1) AND id <> $2 LIMIT 1";
+            $res = pg_query_params($this->conn, $sql, [$title, $exceptId]);
+        } else {
+            $sql = "SELECT 1 FROM todo WHERE LOWER(title)=LOWER($1) LIMIT 1";
+            $res = pg_query_params($this->conn, $sql, [$title]);
+        }
+        if (!$res) return false;
+        return (pg_fetch_row($res) !== false);
+    }
+
+    public function create($title, $description, $is_finished) {
+        $is = ($is_finished ? 't' : 'f');
+        $sql = "INSERT INTO todo (title, description, is_finished, sort_order, created_at, updated_at)
+                VALUES ($1, $2, $3::boolean, COALESCE((SELECT MAX(sort_order) FROM todo), 0) + 1, NOW(), NOW())";
+        $res = pg_query_params($this->conn, $sql, [$title, $description, $is]);
+        return $res !== false;
+    }
+
+    public function update($id, $title, $description, $is_finished) {
+        $is = ($is_finished ? 't' : 'f');
+        $sql = "UPDATE todo
+                SET title = $2, description = $3, is_finished = $4::boolean, updated_at = NOW()
+                WHERE id = $1";
+        $res = pg_query_params($this->conn, $sql, [$id, $title, $description, $is]);
+        return $res !== false;
+    }
+
+    public function delete($id) {
+        $sql = "DELETE FROM todo WHERE id = $1";
+        $res = pg_query_params($this->conn, $sql, [$id]);
+        return $res !== false;
+    }
+
+    public function reorder(array $ids) {
+        if (empty($ids)) return false;
+        pg_query($this->conn, 'BEGIN');
+        $pos = 1;
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            $res = pg_query_params($this->conn, "UPDATE todo SET sort_order = $1 WHERE id = $2", [$pos, $id]);
+            if (!$res) {
+                pg_query($this->conn, 'ROLLBACK');
+                return false;
+            }
+            $pos++;
+        }
+        pg_query($this->conn, 'COMMIT');
+        return true;
+    }
 }
