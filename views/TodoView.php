@@ -242,24 +242,41 @@
 <!-- Bootstrap Bundle via CDN -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- SortableJS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-
 <script>
-function showModalEditTodo(id, title, desc, done) {
-  document.getElementById('editId').value = id;
-  document.getElementById('editTitle').value = title;
-  document.getElementById('editDesc').value = desc;
-  document.getElementById('editDone').checked = !!done;
-  new bootstrap.Modal(document.getElementById('editTodo')).show();
-}
-
-// tampilkan modal detail otomatis jika ada ?id=
-<?php if (!empty($selectedTodo)): ?>
 document.addEventListener('DOMContentLoaded', () => {
-  new bootstrap.Modal(document.getElementById('detailTodoModal')).show();
+  const tbody = document.getElementById('todoTable');
+  if (!tbody) return;
+
+  new Sortable(tbody, {
+    animation: 150,
+    handle: '.drag-handle',
+    onEnd: async function () {
+      // Ambil urutan ID dari semua <tr> di tabel
+      const order = Array.from(tbody.querySelectorAll('tr'))
+                         .map(tr => tr.dataset.id);
+
+      try {
+        // Kirim urutan ke controller
+        const res = await fetch('?page=reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order })
+        });
+
+        const data = await res.json();
+        if (data.ok) {
+          console.log("✅ Urutan berhasil disimpan");
+        } else {
+          console.warn("⚠️ Gagal menyimpan urutan:", data.error);
+        }
+      } catch (err) {
+        console.error("❌ Gagal mengirim permintaan reorder:", err);
+      }
+    }
+  });
 });
-<?php endif; ?>
 </script>
+
 </body>
 </html>
