@@ -104,13 +104,14 @@
                    href="index.php?id=<?= (int)$todo['id'] ?>&filter=<?= urlencode($filter ?? 'all') ?>&q=<?= urlencode($q ?? '') ?>">
                   <i class="bi bi-info-circle"></i> Detail
                 </a>
+                <!-- Ubah pakai json_encode agar aman -->
                 <button class="btn btn-sm btn-outline-warning rounded-3 me-1"
-                  onclick="showModalEditTodo(
-                    <?= (int)$todo['id'] ?>,
-                    '<?= htmlspecialchars(addslashes($todo['title'])) ?>',
-                    '<?= htmlspecialchars(addslashes($todo['description'] ?? '')) ?>',
-                    <?= !empty($todo['is_finished']) ? 1 : 0 ?>
-                  )">
+                  onclick='showModalEditTodo(
+                    <?= (int)$todo["id"] ?>,
+                    <?= json_encode($todo["title"]) ?>,
+                    <?= json_encode($todo["description"] ?? "") ?>,
+                    <?= !empty($todo["is_finished"]) ? "true" : "false" ?>
+                  )'>
                   <i class="bi bi-pencil-square"></i> Ubah
                 </button>
                 <a class="btn btn-sm btn-outline-danger rounded-3"
@@ -186,12 +187,12 @@
       </div>
       <div class="modal-footer border-0">
         <button class="btn btn-outline-warning rounded-3"
-          onclick="showModalEditTodo(
-            <?= (int)$selectedTodo['id'] ?>,
-            '<?= htmlspecialchars(addslashes($selectedTodo['title'])) ?>',
-            '<?= htmlspecialchars(addslashes($selectedTodo['description'] ?? '')) ?>',
-            <?= !empty($selectedTodo['is_finished']) ? 1 : 0 ?>
-          )">
+          onclick='showModalEditTodo(
+            <?= (int)$selectedTodo["id"] ?>,
+            <?= json_encode($selectedTodo["title"]) ?>,
+            <?= json_encode($selectedTodo["description"] ?? "") ?>,
+            <?= !empty($selectedTodo["is_finished"]) ? "true" : "false" ?>
+          )'>
           <i class="bi bi-pencil-square"></i> Ubah
         </button>
         <a href="?page=delete&id=<?= (int)$selectedTodo['id'] ?>"
@@ -242,41 +243,67 @@
 <!-- Bootstrap Bundle via CDN -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+<!-- SortableJS untuk drag-reorder -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+<!-- Script Aplikasi -->
 <script>
+// === Fungsi untuk membuka modal Edit dengan data yang diisi ===
+function showModalEditTodo(id, title, description, isFinished) {
+  const idEl    = document.getElementById('editId');
+  const titleEl = document.getElementById('editTitle');
+  const descEl  = document.getElementById('editDesc');
+  const doneEl  = document.getElementById('editDone');
+
+  idEl.value       = id;
+  titleEl.value    = title || '';
+  descEl.value     = description || '';
+  doneEl.checked   = !!isFinished;
+
+  const modalEl = document.getElementById('editTodo');
+  const modal   = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  // Drag-reorder tabel
   const tbody = document.getElementById('todoTable');
-  if (!tbody) return;
-
-  new Sortable(tbody, {
-    animation: 150,
-    handle: '.drag-handle',
-    onEnd: async function () {
-      // Ambil urutan ID dari semua <tr> di tabel
-      const order = Array.from(tbody.querySelectorAll('tr'))
-                         .map(tr => tr.dataset.id);
-
-      try {
-        // Kirim urutan ke controller
-        const res = await fetch('?page=reorder', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ order })
-        });
-
-        const data = await res.json();
-        if (data.ok) {
-          console.log("✅ Urutan berhasil disimpan");
-        } else {
-          console.warn("⚠️ Gagal menyimpan urutan:", data.error);
+  if (tbody) {
+    new Sortable(tbody, {
+      animation: 150,
+      handle: '.drag-handle',
+      onEnd: async function () {
+        const order = Array.from(tbody.querySelectorAll('tr')).map(tr => tr.dataset.id);
+        try {
+          const res = await fetch('?page=reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order })
+          });
+          const data = await res.json();
+          if (data.ok) {
+            console.log("✅ Urutan berhasil disimpan");
+          } else {
+            console.warn("⚠️ Gagal menyimpan urutan:", data.error);
+          }
+        } catch (err) {
+          console.error("❌ Gagal mengirim permintaan reorder:", err);
         }
-      } catch (err) {
-        console.error("❌ Gagal mengirim permintaan reorder:", err);
       }
-    }
-  });
+    });
+  }
 });
 </script>
+
+<!-- Auto-open Modal Detail jika $selectedTodo ada -->
+<?php if (!empty($selectedTodo)): ?>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const el = document.getElementById('detailTodoModal');
+  if (el) bootstrap.Modal.getOrCreateInstance(el).show();
+});
+</script>
+<?php endif; ?>
 
 </body>
 </html>
