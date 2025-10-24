@@ -1,6 +1,10 @@
 <?php
-define('DB_HOST', 'localhost');
-define('DB_USER', 'postgres');          // ganti jika user DB kamu beda
-define('DB_PASSWORD', 'postgres');      // ganti jika password DB kamu beda
-define('DB_NAME', 'db_todo');
-define('DB_PORT', '5432');
+$host = 'localhost';
+$port = '5432';
+$db   = 'glenreje_todolist';
+$user = 'glenreje_todolistuser';
+$pass = 'Todo@2025!';
+
+$pdo = new PDO("pgsql:host=$host;port=$port;dbname=$db", $user, $pass, [
+  PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+]);

@@ -1,0 +1,20 @@
+---
+deployment:
+  tasks:
+    # Set path home & target deploy
+    - export USER_HOME=/home/glenreje
+    - export DEPLOY_PATH=$USER_HOME/public_html
+
+    # Pastikan folder tujuan ada
+    - /bin/mkdir -p $DEPLOY_PATH
+
+    # Sinkronkan semua file repo ke public_html (kecuali folder/berkas ini)
+    - /bin/rsync -av --delete \
+        --exclude='.git' \
+        --exclude='.github' \
+        --exclude='.cpanel.yml' \
+        ./ $DEPLOY_PATH
+
+    # (Opsional tapi disarankan) Set permission aman
+    - /bin/find $DEPLOY_PATH -type d -exec chmod 755 {} \;
+    - /bin/find $DEPLOY_PATH -type f -exec chmod 644 {} \;
